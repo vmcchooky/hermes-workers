@@ -30,7 +30,9 @@ class HermesRoutingTests(unittest.TestCase):
         # no D:/Hermes). Config-assertion tests keep using the real catalog.
         cls.test_catalog = copy.deepcopy(cls.catalog)
         cls.test_catalog["policy"]["allowed_workdir_roots"] = [str(ROOT)]
-        cls.test_catalog["routes"]["opencode-zen-contributor"]["allowed_workdir"] = str(WORKDIR)
+        for route in cls.test_catalog["routes"].values():
+            if isinstance(route, dict) and route.get("allowed_workdir"):
+                route["allowed_workdir"] = str(WORKDIR)
         # Directory policies resolve relative to the catalog file; pin them to
         # absolute repo paths so the temp catalog stays inside HERMES_ROOT
         # scope (dry-runs never write, this only satisfies validation).
