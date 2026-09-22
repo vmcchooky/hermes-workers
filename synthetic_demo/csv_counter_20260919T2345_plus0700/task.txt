@@ -1,0 +1,9 @@
+Implement this task entirely within D:\Hermes\synthetic_demo\csv_counter_20260919T2345_plus0700:
+
+Create a standard-library-only Python tool that reads a synthetic CSV file with columns job_id,status and counts completed/failed/unknown statuses. Keep job_id as string. Reject any invalid status value with a clear error. Write unit tests for the happy path, an empty file, and a bad status. Run the tests.
+
+Requirements:
+- Do not read or modify files outside this workdir.
+- Use only the Python standard library in the implementation and tests.
+- Produce a complete working implementation, not a plan.
+- In your final response, state the exact test command and its observed result, including tests run/passed/failed.

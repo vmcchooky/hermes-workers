@@ -1,0 +1,93 @@
+# ===== Hermes secrets: NEVER commit these =====
+auth.json
+auth.lock
+.codex_worker/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ===== Runtime state: machine-local, regenerated on run =====
+state.db*
+*.lock
+.install_id.lock
+install_id
+processes.json
+spawn-ledger.json
+state/
+sessions/
+logs/
+.hermes_history
+msgs.txt
+latest_msgs.txt
+pairing/
+pastes/
+memories/
+desktop/
+cron/
+platforms/
+hooks/
+lsp/
+# MoonStorm operational task files (private context)
+tasks/
+# Coordinator session workdirs and session dumps (accumulate per run)
+202*/
+202[0-9]*
+runtime/
+sandboxes/
+
+# ===== Safety copies (may contain sensitive diffs) =====
+backups/
+.curator_backups/
+
+# ===== Caches (regenerated) =====
+cache/
+audio_cache/
+image_cache/
+images/
+models_dev_cache*
+provider_models_cache.json
+ollama_cloud_models_cache.json
+context_length_cache.yaml
+.skills_prompt_snapshot.json
+tui-theme-boot.json
+web-ui-build-stamp.json
+
+# ===== Vendor binaries inside bin/ (product install, not source) =====
+bin/*.exe
+
+# ===== Databases (all runtime state) =====
+*.db*
+
+# ===== Install-specific (paths, venv, env) =====
+.env
+node/
+hermes-agent/
+__pycache__/
+*.pyc
+Desktop.ini
+Thumbs.db
+.update_check
+.codex_*
+
+# ===== Bundled third-party skills (vendor bundle, not our layer) =====
+skills/*
+!skills/autonomous-ai-agents/
+skills/autonomous-ai-agents/*
+!skills/autonomous-ai-agents/hermes-routing/
+
+# ===== Synthetic sandbox debris (fixtures stay, evidence goes) =====
+synthetic_demo/job_events_*/
+synthetic_demo/*/backups/
+synthetic_demo/**/*.log
+
+# ===== Local operational reports (install-specific history) =====
+BAO_CAO_*.md
+ROUTING_FIX_REPORT.md
+README_HERMES_EVAL.md
+
+# ===== Convenience launchers (hardcoded install paths) =====
+start_*.bat
+start_*.ps1
+sync_*.bat
+sync_*.py

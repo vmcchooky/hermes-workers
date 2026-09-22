@@ -1,0 +1,357 @@
+{
+  "catalog_version": 6,
+  "generated_at": "2026-09-22",
+  "verification": {
+    "mode": "read-only-cli-probe",
+    "inference_run": false,
+    "notes": "Model IDs and adapter flags were read from local help/catalog metadata (codex --help, agy --help, agy models). agy 1.2.7 rejects --effort for claude-opus-4-6-thinking before inference, so that route is model-integrated/default with effort unconfirmed. Terra/Astra have no verified catalog route yet and must not be invented. End-to-end availability remains unverified until the official follow-up test. Worker timeout is a whole-child hard wall; large tasks must split checkpoints or carry an explicit approved per-task timeout. 2026-09-21: verified headless resume flags via --help probes (codex exec resume <session>, agy --conversation <id>, opencode run --session <id>); added timeout tiers, resume policy, routing tiers, and task-sizing guidance. 2026-09-21 (v3): added fixup_policy (new-task-key fixups, cap 2, --fixup-of/--fixup-depth audit flags), ephemeral_worktree policy (Brain creates, launcher never auto-creates; D:\\Hermes is not a git repo so worktrees live in target repos), and outer_ring pilot policy (redaction aid with mandatory Brain review; no Cline integration). 2026-09-22 (v4): task_sizing gate (warn 2500 chars, hard cap 6000 with --size-approval; measured on the FINAL prompt post-header; absolute 30000-char Win32 command-line ceiling; thresholds from 25 receipts where all timeouts were >=2550 chars); worker contract header injected by launcher (no worker-side test suites, parseable closing block); same-key resume verification incl. retry auto-verify (zero extra I/O, exact match); stateful fixup depth (depths must follow recorded count 1,2,... under one stable origin id); read_catalog BOM-tolerant; removed duplicate default_timeout_seconds (single source: timeout_policy.standard_seconds). Red-team findings that were REJECTED with reasons: contract idempotency on resume (fresh prompt per call, no duplication), case-folded session compare (CLI replays the id verbatim), NTFS colon worry (fixup_of never becomes a filename), as_posix slashes (universally accepted). 2026-09-22 (v5): per-key total time budget 1200s with unified --timeout-approval escape (also gates a 3rd attempt after 2 prior timeouts; trigger list in receipt.timeout_policy); ledger entries record timeout_seconds; soft timeout-discipline stays a warning only (a 456s success needed its 600s wall); key-text drift kept as procedure guidance, not code (provider prefix-cache micro). 2026-09-22 (v6): CI workflow (Windows matrix 3.11/3.13, suites plus secretscan); read-only Brain-vs-worker usage reporter (receipts plus state.db CanonicalUsage, sections never summed); catalog re-probe procedure (read-only, no inference); streaming stdout reader formally CUT (Windows pipe risk, zero gain on single-JSON adapters); Job Object cleanup deferred to launcher-crash case only (tree-kill already verified in production). No inference was run."
+  },
+  "cli_versions_observed": {
+    "codex": "0.155.1",
+    "antigravity-cli": "1.2.7",
+    "opencode": "1.18.31"
+  },
+  "policy": {
+    "worker_full_access": true,
+    "authorization": "Supervisor explicit full-access request 2026-09-19; launcher workers only",
+    "allowlisted_routes_only": true,
+    "model_effort_allowlist_enforced": true,
+    "max_same_route_retries": 1,
+    "max_fallback_routes": 1,
+    "max_attempts_per_task": 3,
+    "contributor_scope": "synthetic-public-only",
+    "attempt_ledger": "logs\\worker_attempts",
+    "worktree_locks": "logs\\worker_worktrees",
+    "model_effort_allowlist": {
+      "version": 1,
+      "notes": "Single source of truth for model/effort pairs. IDs verified against provider_models_cache.json (openai-codex models list), `agy models`, and in-repo adapter metadata (agent/reasoning_effort.py, agent/model_metadata.py). The launcher loads this table; it keeps no copy. Unknown pairs are unavailable, never silently remapped.",
+      "pairs": {
+        "gpt-5.6-luna": ["max"],
+        "gpt-5.6-terra": ["low", "medium", "high", "xhigh"],
+        "gpt-5.6-sol": ["low", "medium", "high", "xhigh"],
+        "gpt-6-astra": ["low"],
+        "gpt-6-astra-900k": ["low"],
+        "gemini-3.8-flash-high": ["high"],
+        "gemini-3.1-pro-high": ["high"],
+        "opencode/muse-spark-1.3-contributor-free": ["xhigh"],
+        "amazon-bedrock/anthropic.claude-opus-4-6-v1": ["high", "max"]
+      }
+    },
+    "allowed_workdir_roots": [
+      "D:\\Hermes",
+      "D:\\Quorix\\moonstorm\\scratch\\g2-integration",
+      "D:\\Quorix\\moonstorm\\scratch\\sched-backup-retention-a",
+      "D:\\Quorix\\moonstorm\\scratch\\sched-backup-retention-b",
+      "D:\\Quorix\\moonstorm\\scratch\\sched-backup-retention-c"
+    ],
+    "provider_failover": false,
+    "max_invocation_corrections": 1,
+    "stdin": "closed",
+    "pty": false,
+    "timeout_policy": {
+      "standard_seconds": 600,
+      "max_approved_seconds": 1800,
+      "total_budget_seconds": 1200,
+      "scope": "whole child worker process, including local commands and tests",
+      "large_task_action": "split checkpoint or use an explicitly approved per-task timeout",
+      "approval_argument": "--timeout-approval",
+      "total_budget_note": "Cumulative spawned walls per task-key may not exceed total_budget_seconds (1200 = two full walls) without --timeout-approval; same unified escape also gates a 3rd attempt after 2 prior timeouts. Forces small tiers first instead of repeated 600s burns."
+    },
+    "timeout_tiers": {
+      "small_seconds": 180,
+      "medium_seconds": 300,
+      "standard_seconds": 600,
+      "guidance": "Draft/small fix: 120-180s. Medium/hard logic: 300s. Standard default: 600s. Above 600s requires --timeout-approval. Smaller tiered deadlines fail fast instead of burning a full 600s black box; the launcher records the tier label in timeout_policy metadata."
+    },
+    "resume_policy": {
+      "allowed": true,
+      "same_tool_only": true,
+      "launcher_flags": "--resume-session <worker_session_id> [--resume-from-job <job_id>]",
+      "codex_resume_requires_full_access": true,
+      "codex_argv": "codex exec resume --json -m <model> -c cli_auth_credentials_store=file -c model_reasoning_effort=<effort> [--dangerously-bypass-approvals-and-sandbox] <session> <task>",
+      "agy_argv": "agy --conversation <session> -p <task> --model <model> [--effort <effort>] --output-format json --print-timeout <Ns>",
+      "opencode_argv": "opencode run --model <model> --variant <effort> --format json --dir <workdir> --session <session> <task>",
+      "budget": "resume never bypasses attempt budgets; a fixup after Brain direct tests is a NEW task-key with its own budget, linked via --resume-from-job",
+      "timeout_reconcile": "resuming a timed-out session still requires prior reconcile plus --reconciled",
+      "audit": "receipt.resume {requested_session, from_job, mode} and ledger worker_session_id/resume_session/resume_from_job"
+    },
+    "routing_tiers": {
+      "tier1_draft": {
+        "routes": ["antigravity-normal", "codex-normal"],
+        "timeout_seconds": 180,
+        "use": "ordinary drafting, small fixes, first attempt at any bounded phase"
+      },
+      "tier2_hard": {
+        "routes": ["codex-hard", "codex-terra", "antigravity-hard"],
+        "timeout_seconds": 300,
+        "use": "complex logic, deep refactoring, architecture work; escalate here only after tier-1 stalls on architecture"
+      },
+      "tier3_review_paid": {
+        "routes": ["codex-review", "antigravity-review", "opencode-bedrock"],
+        "timeout_seconds": 300,
+        "use": "hard decisions, high-risk review, paid fallback; bounded invocations only"
+      }
+    },
+    "task_sizing": {
+      "max_recommended_task_chars": 2500,
+      "warn_chars": 2500,
+      "hard_cap_chars": 6000,
+      "approval_argument": "--size-approval",
+      "max_recommended_timeout_without_split": 300,
+      "rule": "one worker call = one phase (<180s draft, <300s hard). Never dispatch read-everything-plus-implement-plus-test monoliths; split into phase 1 (interfaces/main code) and phase 2 (edge cases/test fixups via resumed session).",
+      "gate_note": "Launcher warns above warn_chars (receipt.size.oversize_warn) and refuses above hard_cap_chars without an explicit --size-approval note (only a hash is recorded). Thresholds from 25 receipts: all timeouts >=2550 chars (median 3338) vs success median 982. Revisit after N>=100; dense-but-legit payloads (schemas) use the approval escape, not silent chunking."
+    },
+    "fixup_policy": {
+      "fixup_is_new_task_key": true,
+      "max_consecutive_fixups": 2,
+      "recommended_timeout_seconds": 180,
+      "resume_required": true,
+      "launcher_flags": "--fixup-of <origin-task-key-or-job> --fixup-depth <1-or-2>",
+      "rule": "A Brain-test failure after a succeeded worker is fixed by a NEW task-key that resumes the prior session (never --attempt-kind retry on the old key). Depth counts consecutive fixup task-keys per origin; after the cap, save a checkpoint and report a blocker instead of opening another fixup.",
+      "timeout_note": "180s fits draft-tier fixups. Hard-task fixups observed at 177-554s must use tier-2 300s, not the fixup default."
+    },
+    "ephemeral_worktree": {
+      "launcher_auto_create": false,
+      "creator": "hermes-brain-direct-git-only",
+      "requires_git_repo": true,
+      "must_pre_register_allowlist": true,
+      "branch_prefix": "job-",
+      "rule": "The launcher never creates worktrees. Brain creates a temp worktree inside the target git repo (never under D:\\Hermes, which is not a git repo), pre-registers its path in allowed_workdir_roots, then dispatches the worker with --workdir pointing at it. PASS: Brain merges the job branch directly (deterministic git op). FAIL/TIMEOUT: Brain removes the worktree (git worktree remove --force) and deletes the job branch; main stays pristine. Forbidden on the contributor route (exact-workdir lock). Parallel workers require distinct pre-registered worktrees; the single-writer lock still applies per worktree.",
+      "cleanup": "git worktree remove --force <path>; git branch -D job-<job_id>"
+    },
+    "outer_ring": {
+      "pilot": true,
+      "languages": ["python"],
+      "tool": "bin/hermes-stubgen.py",
+      "review_gate": "mandatory-brain-review-before-external-use",
+      "allowed_workdir": "D:\\Hermes\\synthetic_demo only; no new outer-ring dir without a catalog update",
+      "cline_integration": false,
+      "rule": "Stubs are redaction aids, not air gaps: signatures/docstrings/decorators are dropped or kept per tool output and MUST be Brain-reviewed for leaked logic, secrets in defaults, and endpoint paths before any contributor/external use. Stale stubs (backend changed after generation) are a bug source; regenerate per use."
+    },
+    "usage_log": "logs\\worker_usage.jsonl",
+    "input_storage": "sha256-only",
+    "tests_are_direct": true,
+    "quota_exhaustion": {
+      "signal": "usage_limit_reached",
+      "failure_class": "quota_exhausted_checkpoint",
+      "automatic_short_retry": false,
+      "same_quota_bucket_fallback": "blocked",
+      "normal_429": "provider_retryable"
+    }
+  },
+  "routes": {
+    "codex-normal": {
+      "tool": "codex",
+      "provider": "openai-codex",
+      "executable_candidates": [
+        "codex.exe",
+        "codex"
+      ],
+      "model_display": "GPT-5.6 Luna",
+      "model_id": "gpt-5.6-luna",
+      "reasoning_requested": "max",
+      "reasoning_flag": "-c model_reasoning_effort=max",
+      "recommended_timeout_seconds": 180,
+      "resume_supported": true,
+      "resume_flag": "exec resume <session>",
+      "quota_bucket": "openai-codex-account",
+      "sandbox": "workspace-write",
+      "requires_git_worktree": true,
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "codex exec --json turn.completed.usage",
+      "session_id_source": "codex JSONL thread.started.thread_id"
+    },
+    "codex-hard": {
+      "tool": "codex",
+      "provider": "openai-codex",
+      "executable_candidates": [
+        "codex.exe",
+        "codex"
+      ],
+      "model_display": "GPT-5.6 Sol",
+      "model_id": "gpt-5.6-sol",
+      "reasoning_requested": "high",
+      "reasoning_flag": "-c model_reasoning_effort=high",
+      "recommended_timeout_seconds": 300,
+      "resume_supported": true,
+      "resume_flag": "exec resume <session>",
+      "quota_bucket": "openai-codex-account",
+      "sandbox": "workspace-write",
+      "requires_git_worktree": true,
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "codex exec --json turn.completed.usage",
+      "session_id_source": "codex JSONL thread.started.thread_id"
+    },
+    "codex-terra": {
+      "tool": "codex",
+      "provider": "openai-codex",
+      "executable_candidates": [
+        "codex.exe",
+        "codex"
+      ],
+      "model_display": "GPT-5.6 Terra",
+      "model_id": "gpt-5.6-terra",
+      "reasoning_requested": "high",
+      "reasoning_flag": "-c model_reasoning_effort=high",
+      "recommended_timeout_seconds": 300,
+      "resume_supported": true,
+      "resume_flag": "exec resume <session>",
+      "quota_bucket": "openai-codex-account",
+      "sandbox": "workspace-write",
+      "requires_git_worktree": true,
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "codex exec --json turn.completed.usage",
+      "session_id_source": "codex JSONL thread.started.thread_id"
+    },
+    "codex-review": {
+      "tool": "codex",
+      "provider": "openai-codex",
+      "executable_candidates": [
+        "codex.exe",
+        "codex"
+      ],
+      "model_display": "GPT-6 Astra",
+      "model_id": "gpt-6-astra",
+      "reasoning_requested": "low",
+      "reasoning_flag": "-c model_reasoning_effort=low",
+      "recommended_timeout_seconds": 300,
+      "resume_supported": true,
+      "resume_flag": "exec resume <session>",
+      "quota_bucket": "openai-codex-account",
+      "sandbox": "workspace-write",
+      "requires_git_worktree": true,
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "codex exec --json turn.completed.usage",
+      "session_id_source": "codex JSONL thread.started.thread_id"
+    },
+    "antigravity-normal": {
+      "tool": "antigravity-cli",
+      "provider": "antigravity",
+      "executable_candidates": [
+        "agy.exe",
+        "agy"
+      ],
+      "model_display": "Gemini 3.8 Flash (High)",
+      "model_id": "gemini-3.8-flash-high",
+      "reasoning_requested": "high",
+      "reasoning_flag": "--effort high",
+      "recommended_timeout_seconds": 180,
+      "resume_supported": true,
+      "resume_flag": "--conversation <session>",
+      "reasoning_mode": "explicit-effort",
+      "effort_confirmed": true,
+      "quota_bucket": "antigravity-account",
+      "output_format": "json",
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "agy --output-format json when usage is emitted; otherwise unknown",
+      "session_id_source": "agy JSON session_id when emitted"
+    },
+    "antigravity-hard": {
+      "tool": "antigravity-cli",
+      "provider": "antigravity",
+      "executable_candidates": [
+        "agy.exe",
+        "agy"
+      ],
+      "model_display": "Gemini 3.1 Pro (High)",
+      "model_id": "gemini-3.1-pro-high",
+      "reasoning_requested": "high",
+      "reasoning_flag": "--effort high",
+      "recommended_timeout_seconds": 300,
+      "resume_supported": true,
+      "resume_flag": "--conversation <session>",
+      "reasoning_mode": "explicit-effort",
+      "effort_confirmed": true,
+      "quota_bucket": "antigravity-account",
+      "output_format": "json",
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "agy --output-format json when usage is emitted; otherwise unknown",
+      "session_id_source": "agy JSON session_id when emitted"
+    },
+    "antigravity-review": {
+      "tool": "antigravity-cli",
+      "provider": "antigravity",
+      "executable_candidates": [
+        "agy.exe",
+        "agy"
+      ],
+      "model_display": "Claude Opus 4.6 (Thinking)",
+      "model_id": "claude-opus-4-6-thinking",
+      "reasoning_requested": "model-integrated/default, effort chưa xác nhận",
+      "reasoning_flag": null,
+      "reasoning_mode": "model-integrated/default",
+      "effort_confirmed": false,
+      "recommended_timeout_seconds": 300,
+      "resume_supported": true,
+      "resume_flag": "--conversation <session>",
+      "quota_bucket": "antigravity-account",
+      "capability_note": "agy 1.2.7 rejects --effort for this model before inference; use model-integrated/default",
+      "output_format": "json",
+      "scope": "repository",
+      "available": true,
+      "blocker": null,
+      "usage_source": "agy --output-format json when usage is emitted; otherwise unknown",
+      "session_id_source": "agy JSON session_id when emitted"
+    },
+    "opencode-zen-contributor": {
+      "tool": "opencode",
+      "provider": "opencode",
+      "executable_candidates": [
+        "opencode.cmd",
+        "opencode.exe",
+        "opencode"
+      ],
+      "model_display": "Muse Spark 1.3 Contributor",
+      "model_id": "opencode/muse-spark-1.3-contributor-free",
+      "reasoning_requested": "xhigh",
+      "reasoning_flag": "--variant xhigh",
+      "recommended_timeout_seconds": 180,
+      "resume_supported": true,
+      "resume_flag": "--session <session>",
+      "output_format": "json",
+      "scope": "synthetic-public-only",
+      "allowed_workdir": "D:\\Hermes\\synthetic_demo",
+      "quota_bucket": "opencode-contributor-account",
+      "available": true,
+      "blocker": "Chỉ nhận synthetic/public; không gửi source riêng hoặc credentials.",
+      "usage_source": "opencode JSON step-finish.tokens and cost when emitted",
+      "session_id_source": "opencode JSON sessionID/session_id"
+    },
+    "opencode-bedrock": {
+      "tool": "opencode",
+      "provider": "amazon-bedrock",
+      "executable_candidates": [
+        "opencode.cmd",
+        "opencode.exe",
+        "opencode"
+      ],
+      "model_display": "Claude Opus 4.6",
+      "model_id": "amazon-bedrock/anthropic.claude-opus-4-6-v1",
+      "reasoning_requested": "max",
+      "reasoning_flag": "--variant max",
+      "recommended_timeout_seconds": 300,
+      "resume_supported": true,
+      "resume_flag": "--session <session>",
+      "quota_bucket": "amazon-bedrock-account",
+      "adapter_fallback_reasoning": "high",
+      "output_format": "json",
+      "scope": "repository",
+      "available": true,
+      "blocker": "Chưa phát sinh inference trong bước setup; nếu adapter từ chối max thì sửa đúng một lần sang high và ghi vào receipt.",
+      "usage_source": "opencode JSON step-finish.tokens and provider-reported cost when emitted",
+      "session_id_source": "opencode JSON sessionID/session_id"
+    }
+  }
+}
