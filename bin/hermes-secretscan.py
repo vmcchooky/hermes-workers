@@ -155,16 +155,21 @@ def is_ignored(rel_posix: str, patterns: list[tuple[bool, re.Pattern[str]]]) -> 
     return _match_level(rel_posix, patterns) is True
 
 
-def scan_file(path: Path) -> list[tuple[int, str]]:
-    """Return [(line_number, rule_name)] without any secret content."""
+def scan_file(path: Path) -> tuple[list[tuple[int, str]], str | None]:
+    """Scan one file. Returns (findings, skip_reason).
+
+    skip_reason is None when scanned, else one of: oversize, unreadable,
+    binary. Skips are reported (never silent) so an unreadable file full of
+    secrets cannot pass the audit quietly.
+    """
     try:
         if path.stat().st_size > MAX_SCAN_BYTES:
-            return []
+            return [], "oversize"
         raw = path.read_bytes()
     except OSError:
-        return []
+        return [], "unreadable"
     if b"\x00" in raw[:4096]:
-        return []
+        return [], "binary"
     findings: list[tuple[int, str]] = []
     for number, line in enumerate(raw.decode("utf-8", errors="replace").splitlines(), 1):
         for name, regex, value_group in RULES:
@@ -176,7 +181,7 @@ def scan_file(path: Path) -> list[tuple[int, str]]:
                     continue
                 findings.append((number, name))
                 break
-    return findings
+    return findings, None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -206,7 +211,14 @@ def main(argv: list[str] | None = None) -> int:
         if ignored and args.tracked_only:
             skipped += 1
             continue
-        findings = scan_file(path)
+        findings, skip_reason = scan_file(path)
+        if skip_reason is not None:
+            # Binaries are expected and filename-guarded below; oversize and
+            # unreadable files are suspicious and must appear in the audit.
+            if skip_reason in ("oversize", "unreadable"):
+                print(f"SKIP {rel} {skip_reason}")
+            skipped += 1
+            continue
         for number, name in findings:
             if ignored:
                 print(f"INFO {rel}:{number} {name}")

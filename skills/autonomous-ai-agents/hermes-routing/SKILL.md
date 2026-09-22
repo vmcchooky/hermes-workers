@@ -1,7 +1,7 @@
 ---
 name: hermes-routing
 description: "Route Hermes work to an allowlisted worker."
-version: 0.8.0
+version: 0.8.1
 author: Hermes Supervisor, Hermes Agent
 license: MIT
 platforms: [windows]
@@ -166,7 +166,9 @@ session with explicit role instruction — resume replays confusion (proven live
   remove + delete-branch on FAIL. Contributor route forbidden; parallel work
   needs distinct worktrees.
 - Fan-out (micro proven: 2 Flash jobs, ~15s, JSONL intact): ALL conditions —
-  disjoint writes, payload ≫ 26–38k overhead (no fan-out <~100 lines), no key
+   disjoint writes, payload well above the measured 26–38k tokens fixed
+   overhead per call (heuristic: no fan-out when the task payload is under
+   ~8000 chars), no key
   on 3rd attempt (turn-3 goes sequential top tier). Diff/summary handoffs
   only; fail-fast downstream; 50k+ spikes need separate accounts (unproven).
 - Stubs (`hermes-stubgen.py`, Python only): Brain reviews output (no bodies;
@@ -175,11 +177,28 @@ session with explicit role instruction — resume replays confusion (proven live
 - Verdicts/proxies (no USD inference, never cross-provider totals): FPVR via
   `logs/brain_verdicts.jsonl` append (`python -c "import json;open(
   'logs/brain_verdicts.jsonl','a').write(json.dumps({'job_id':'<id>',
-  'route':'<route>','test_status':'pass|fail'})+'\n')"`); churn on git repos
-  only; tool-density within one task family only.
+  'route':'<route>','test_status':'pass|fail',
+  'origin':'<session-or-operator>'})+'\n')"`); tag origin for stratification
+  and recompute FPVR with/without foreign origins before citing trends
+  (reporter dedupes by job_id, keeps last); churn on git repos only;
+  tool-density within one task family only; compare non-cached medians
+  within one tool for resume economics (resumed threads inherit cache bulk,
+  so raw medians mislead).
 - Re-probe quarterly or after CLI updates (read-only, no inference):
   `codex exec --help`, `agy --help`, `agy models`. On change, update the
   route entry plus a deterministic test.
+
+## Deferred items register (reviewed quarterly with the re-probe)
+
+| Item | Revisit trigger |
+|---|---|
+| Jev classifier integration | user-supplied API key + 10-task shadow pilot measuring FPVR delta |
+| Dynamic model selector | N≥200 labeled verdicts |
+| Streaming stdout reader | STAYS CUT unless new adapter evidence (single-JSON adapters gain zero) |
+| Job Object cleanup | launcher-crash orphan evidence in production |
+| Language port | profile proving launcher overhead matters (now 168ms vs 15–600s jobs) |
+| Ledger index/DB | N≥100k receipts |
+| Task-key budget race | CLOSED by per-key lock (fail-closed `taskkey_busy`) + single-coordinator discipline |
 
 ## Model/effort allowlist (enforced by the launcher)
 
@@ -217,6 +236,15 @@ session with explicit role instruction — resume replays confusion (proven live
   prompt + `synthetic_demo/AGENTS.override.md`; session files stay local
   (no credential values ever found in stores).
 - Jev classifier deferred (needs key + pilot; regex classifier stays).
+- Per-call overhead decomposes to ~1k chars launcher header + ~2.7k AGENTS.md
+  auto-load + task text; the remaining ~20k+ tokens are provider-side system
+  context, unobservable and untrimmable from here — trim task text, not the
+  header.
+- Single coordinator REQUIRED, not assumed: a second operator was observed
+  live, and concurrent launches break budget/ledger atomicity assumptions.
+  The per-key lock turns concurrent launches into fail-closed refusals, but
+  by policy never run two coordinators against the same task-keys; designate
+  one writer, others read receipts only.
 - `D:\Hermes` is not a repo: no worktrees, no churn metric there.
 
 ## Verification
