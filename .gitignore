@@ -65,6 +65,7 @@ node/
 hermes-agent/
 __pycache__/
 *.pyc
+.pytest_cache/
 Desktop.ini
 Thumbs.db
 .update_check
