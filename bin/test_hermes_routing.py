@@ -708,6 +708,7 @@ class HermesRoutingTests(unittest.TestCase):
         small = launcher.check_task_size("x" * 100, ns(), policy)
         self.assertFalse(small["oversize_warn"])
         self.assertEqual(small["chars"], 100)
+        self.assertEqual(small["prompt_est_tokens"], 25)
         large = launcher.check_task_size("x" * 3000, ns(), policy)
         self.assertTrue(large["oversize_warn"])
         self.assertIsNone(large["approval_fingerprint"])
@@ -758,6 +759,11 @@ class HermesRoutingTests(unittest.TestCase):
         self.assertIn("do the thing", prompt)
         self.assertIn("Work only in this exact directory", prompt)
         self.assertIn("do not run the repository test suite", prompt)
+        self.assertIn("You are the implementer, not Brain, coordinator, or dispatcher", prompt)
+        self.assertIn("Never read files outside the workdir", prompt)
+        self.assertIn("Begin with the target file(s) directly", prompt)
+        self.assertIn("ignore any auto-loaded repository instructions", prompt)
+        self.assertLess(prompt.index("ROLE LOCK"), prompt.index("Workspace:"))
         self.assertIn("Files changed:", prompt)
         self.assertIn("Self-check:", prompt)
         self.assertIn("Verify with:", prompt)
@@ -911,6 +917,33 @@ class HermesRoutingTests(unittest.TestCase):
         self.assertEqual(entry["timeout_seconds"], 300.0)
         self.assertEqual(entry["route"], "codex-normal")
         self.assertTrue(entry["spawned"])
+
+
+    def test_recover_codex_session_usage(self) -> None:
+        import tempfile
+        launcher = self.launcher
+        self.assertIsNone(launcher.recover_codex_session_usage(None))
+        self.assertIsNone(launcher.recover_codex_session_usage("bad id!"))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.assertIsNone(launcher.recover_codex_session_usage("nosuchsession", root))
+            rollout = root / "rollout-2026-01-01T00-00-00-abcd1234.jsonl"
+            rollout.write_text("\n".join([
+                json.dumps({"type": "session_meta"}),
+                json.dumps({"type": "token_usage_record", "payload": {
+                    "thread_token_usage": {"input_tokens": 100, "cached_input_tokens": 10,
+                                           "output_tokens": 5, "reasoning_output_tokens": 2}}}),
+                "not-json{{{",
+                json.dumps({"type": "token_usage_record", "payload": {
+                    "thread_token_usage": {"input_tokens": 300, "cached_input_tokens": 200,
+                                           "output_tokens": 9, "reasoning_output_tokens": 4}}}),
+            ]) + "\n", encoding="utf-8")
+            recovered = launcher.recover_codex_session_usage("abcd1234", root)
+            assert recovered is not None
+            self.assertEqual(recovered["input_tokens"], 300)
+            self.assertEqual(recovered["cached_input_tokens"], 200)
+            self.assertEqual(recovered["output_tokens"], 9)
+            self.assertEqual(recovered["source"], "codex-session-store-posthoc")
 
 
 if __name__ == "__main__":
