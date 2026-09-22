@@ -137,5 +137,28 @@ class SecretscanTests(unittest.TestCase):
             )
 
 
+    def test_skipped_files_are_reported_not_silent(self) -> None:
+        import tempfile
+        launcher = self.scanner
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".gitignore").write_text("", encoding="utf-8")
+            big = root / "huge.log"
+            with open(big, "wb") as handle:
+                handle.seek(6 * 1024 * 1024 - 1)
+                handle.write(b"\0")
+            findings, reason = launcher.scan_file(big)
+            self.assertEqual(findings, [])
+            self.assertEqual(reason, "oversize")
+            binary = root / "blob.bin"
+            binary.write_bytes(b"\x00\x01ABC")
+            findings, reason = launcher.scan_file(binary)
+            self.assertEqual(reason, "binary")
+            result = self.run_scanner(root)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("SKIP huge.log oversize", result.stdout)
+            self.assertNotIn("SKIP blob.bin", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

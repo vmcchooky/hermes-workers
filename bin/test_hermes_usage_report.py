@@ -84,7 +84,7 @@ class UsageReportTests(unittest.TestCase):
             self.assertIn("usd=1.5000", out)
             self.assertIn("m-a: calls=4 input=1500", out)
             self.assertIn("FPVR: 1/2 passed first try", out)
-            self.assertEqual(sum(1 for line in out.splitlines() if line.startswith("==")), 3)
+            self.assertEqual(sum(1 for line in out.splitlines() if line.startswith("==")), 4)
             self.assertNotIn("combined total", out.lower())
             self.assertIn("skipped (not JSON)", out)
 
@@ -98,6 +98,60 @@ class UsageReportTests(unittest.TestCase):
             self.assertIn("(no worker jobs recorded)", result.stdout)
             self.assertIn("(no brain usage recorded)", result.stdout)
             self.assertIn("(no matched verdicts)", result.stdout)
+
+
+    def test_resume_economics_split(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            log = root / "usage.jsonl"
+            log.write_text("\n".join([
+                json.dumps({"job_id": "a", "route": "r", "tool": "codex",
+                            "status": "succeeded",
+                            "usage": {"input": 100, "cached_input": 0,
+                                      "output": 10, "reasoning": 0},
+                            "resume": {"mode": "fresh"}, "cost": {}}),
+                json.dumps({"job_id": "b", "route": "r", "tool": "codex",
+                            "status": "succeeded",
+                            "usage": {"input": 300, "cached_input": 0,
+                                      "output": 10, "reasoning": 0},
+                            "resume": {"mode": "fresh"}, "cost": {}}),
+                json.dumps({"job_id": "c", "route": "r", "tool": "codex",
+                            "status": "succeeded",
+                            "usage": {"input": 150, "cached_input": 100,
+                                      "output": 10, "reasoning": 0},
+                            "resume": {"mode": "resume"}, "cost": {}}),
+                json.dumps({"job_id": "d", "route": "r", "tool": "codex",
+                            "status": "timeout",
+                            "usage": {"input": None, "cached_input": None,
+                                      "output": None, "reasoning": None},
+                            "resume": {"mode": "fresh"}, "cost": {}}),
+            ]) + "\n", encoding="utf-8")
+            result = self.run_reporter("--usage-log", str(log),
+                                       "--state-db", str(root / "no.db"),
+                                       "--verdicts", str(root / "no2.jsonl"))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("codex: fresh_n=3 median_in_fresh=200", result.stdout)
+            self.assertIn("resume_n=1 median_in_resume=150", result.stdout)
+
+    def test_verdicts_dedupe_by_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            log = root / "usage.jsonl"
+            log.write_text(json.dumps(
+                {"job_id": "j1", "route": "r", "tool": "t", "status": "succeeded",
+                 "usage": {}, "resume": {}, "cost": {}}) + "\n", encoding="utf-8")
+            verdicts = root / "verdicts.jsonl"
+            verdicts.write_text("\n".join([
+                json.dumps({"job_id": "j1", "test_status": "fail"}),
+                json.dumps({"job_id": "j1", "test_status": "pass"}),
+                json.dumps({"job_id": "ghost", "test_status": "pass"}),
+            ]) + "\n", encoding="utf-8")
+            result = self.run_reporter("--usage-log", str(log),
+                                       "--state-db", str(root / "no.db"),
+                                       "--verdicts", str(verdicts))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("FPVR: 1/1 passed first try", result.stdout)
+            self.assertIn("1 verdict(s) reference unknown jobs", result.stdout)
 
 
 if __name__ == "__main__":

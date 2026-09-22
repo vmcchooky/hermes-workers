@@ -102,6 +102,17 @@ def number(value) -> int | float:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
 
 
+def median(values: list) -> int | float | None:
+    nums = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if not nums:
+        return None
+    ordered = sorted(nums)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2
+
+
 def render(receipts: list[dict], brain: list[dict], verdicts: list[dict],
            warnings: list[str]) -> str:
     lines: list[str] = []
@@ -161,13 +172,40 @@ def render(receipts: list[dict], brain: list[dict], verdicts: list[dict],
             f"out={bucket['output']} cache_read={bucket['cache_read']} "
             f"cache_write={bucket['cache_write']} think={bucket['reasoning']}"
         )
+    lines.append("== RESUME ECONOMICS (within-tool only; jobs without input telemetry excluded) ==")
+    by_tool: dict[str, dict] = {}
+    for record in receipts:
+        tool = str(record.get("tool") or "unknown")
+        mode = str((record.get("resume") or {}).get("mode") or "fresh")
+        bucket = by_tool.setdefault(tool, {"fresh": [], "resume": []})
+        if mode in bucket:
+            bucket[mode].append((record.get("usage") or {}).get("input"))
+        else:
+            bucket["fresh"].append((record.get("usage") or {}).get("input"))
+    if not by_tool:
+        lines.append("(no worker jobs recorded)")
+    for tool in sorted(by_tool):
+        bucket = by_tool[tool]
+        lines.append(
+            f"{tool}: fresh_n={len(bucket['fresh'])} "
+            f"median_in_fresh={median(bucket['fresh'])} "
+            f"resume_n={len(bucket['resume'])} "
+            f"median_in_resume={median(bucket['resume'])}"
+        )
     lines.append("== VERDICTS (first-pass verification rate) ==")
     known_jobs = {str(r.get("job_id")) for r in receipts if r.get("job_id")}
-    matched = [v for v in verdicts if str(v.get("job_id")) in known_jobs]
+    seen: dict[str, dict] = {}
+    for verdict in verdicts:
+        job_id = str(verdict.get("job_id") or "")
+        if job_id in known_jobs:
+            seen[job_id] = verdict if isinstance(verdict, dict) else {}
+    matched = list(seen.values())
     passed = sum(1 for v in matched if str(v.get("test_status")) == "pass")
+    unknown_jobs = sorted({str(v.get("job_id") or "") for v in verdicts
+                           if str(v.get("job_id") or "") and str(v.get("job_id")) not in known_jobs})
     if matched:
         lines.append(f"FPVR: {passed}/{len(matched)} passed first try "
-                     f"({len(verdicts) - len(matched)} verdict(s) reference unknown jobs)")
+                     f"({len(unknown_jobs)} verdict(s) reference unknown jobs)")
     else:
         lines.append("(no matched verdicts)")
     for warning in warnings:

@@ -1145,10 +1145,22 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
-def acquire_worktree_lock(path: Path, *, job_id: str, route_id: str, timeout: float) -> None:
-    """Single writer per worktree: exclusive create; live holder blocks, stale is taken over."""
-    entry = {"pid": os.getpid(), "job_id": job_id, "route": route_id,
-             "started_at": utc_now(), "timeout_seconds": timeout}
+def acquire_owner_lock(path: Path, *, job_id: str, scope: str,
+                       entry_extra: dict[str, Any]) -> None:
+    """Single-owner lock with stale takeover; the worktree and task-key locks share it.
+
+    scope 'worktree' serializes writers per directory; scope 'taskkey'
+    serializes budget check/spawn/append per task-key so two concurrent
+    launches can never double-spend one key's budget. Exclusive create;
+    a live holder blocks, a dead holder's lock is taken over. Error codes
+    are scope-prefixed; worktree wording is byte-identical to history.
+    """
+    noun = "worktree" if scope == "worktree" else "task-key"
+    busy_code = f"{scope}_busy"
+    unreleasable_code = f"{scope}_lock_unreleasable"
+    failed_code = f"{scope}_lock_failed"
+    entry = {"pid": os.getpid(), "job_id": job_id,
+             "started_at": utc_now(), **entry_extra}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -1161,29 +1173,46 @@ def acquire_worktree_lock(path: Path, *, job_id: str, route_id: str, timeout: fl
         holder = existing.get("pid") if isinstance(existing, dict) else None
         if _pid_alive(holder):
             raise LauncherError(
-                "worktree_busy",
-                f"another worker (pid {holder}, job {existing.get('job_id')}) holds this worktree; "
-                "never run two workers writing the same worktree",
+                busy_code,
+                f"another worker (pid {holder}, job {existing.get('job_id') if isinstance(existing, dict) else None}) "
+                f"holds this {noun}; concurrent launches on one {noun} are refused, "
+                "wait for the holder or use a new task-key",
             )
         try:
             path.unlink()
         except OSError as exc:
-            raise LauncherError("worktree_lock_unreleasable", f"stale worktree lock cannot be cleared: {type(exc).__name__}") from exc
+            raise LauncherError(unreleasable_code, f"stale {noun} lock cannot be cleared: {type(exc).__name__}") from exc
         try:
             fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError as exc:
-            raise LauncherError("worktree_busy", "worktree lock raced; treat as busy and retry later") from exc
+            raise LauncherError(busy_code, f"{noun} lock raced; treat as busy and retry later") from exc
         entry["stale_lock_cleared"] = True
     except OSError as exc:
-        raise LauncherError("worktree_lock_failed", f"worktree lock could not be created: {type(exc).__name__}") from exc
+        raise LauncherError(failed_code, f"{noun} lock could not be created: {type(exc).__name__}") from exc
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n")
     except OSError as exc:
-        raise LauncherError("worktree_lock_failed", f"worktree lock could not be written: {type(exc).__name__}") from exc
+        raise LauncherError(failed_code, f"{noun} lock could not be written: {type(exc).__name__}") from exc
 
 
-def release_worktree_lock(path: Path, *, job_id: str) -> None:
+def acquire_worktree_lock(path: Path, *, job_id: str, route_id: str, timeout: float) -> None:
+    """Single writer per worktree: exclusive create; live holder blocks, stale is taken over."""
+    return acquire_owner_lock(
+        path, job_id=job_id, scope="worktree",
+        entry_extra={"route": route_id, "timeout_seconds": timeout},
+    )
+
+
+def acquire_taskkey_lock(path: Path, *, job_id: str, route_id: str, timeout: float) -> None:
+    """Single launcher per task-key: serializes budget check, spawn, and ledger append."""
+    return acquire_owner_lock(
+        path, job_id=job_id, scope="taskkey",
+        entry_extra={"route": route_id, "timeout_seconds": timeout},
+    )
+
+
+def release_owner_lock(path: Path, *, job_id: str) -> None:
     """Release only our own lock (job_id match); never clear another holder."""
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -1195,6 +1224,20 @@ def release_worktree_lock(path: Path, *, job_id: str) -> None:
             path.unlink()
         except OSError:
             pass
+
+
+def release_worktree_lock(path: Path, *, job_id: str) -> None:
+    """Release only our own lock (job_id match); never clear another holder."""
+    return release_owner_lock(path, job_id=job_id)
+
+
+def taskkey_lock_path(task_key: str, catalog: dict[str, Any], catalog_path: Path) -> Path:
+    """Lock file serializing one task-key; confined under HERMES_ROOT like all logs."""
+    directory = scoped_log_dir(
+        catalog.get("policy", {}).get("taskkey_locks"), catalog_path,
+        str(HERMES_ROOT / "logs" / "worker_taskkeys"), "taskkey_locks",
+    )
+    return directory / f"{text_hash(task_key)}.lock"
 
 
 def check_data_class(args: argparse.Namespace, route: dict[str, Any]) -> str:
@@ -1861,6 +1904,8 @@ def main() -> int:
     ledger: dict[str, Any] = {"schema": "hermes-worker-attempts/v1", "attempts": []}
     lock_file: Path | None = None
     lock_held = False
+    key_lock_file: Path | None = None
+    key_lock_held = False
     spawned = False
     data_class = "synthetic"
     paid_route = False
@@ -1886,6 +1931,10 @@ def main() -> int:
         time_approval_fp = gate_time_approval(args, approval_triggers)
         timeout_policy["approval_triggers"] = approval_triggers
         timeout_policy["time_approval_fingerprint"] = time_approval_fp
+        if not args.dry_run:
+            key_lock_file = taskkey_lock_path(task_key, catalog, catalog_path)
+            acquire_taskkey_lock(key_lock_file, job_id=job_id, route_id=args.route, timeout=timeout)
+            key_lock_held = True
         attempt_number = enforce_attempt_budget(args, args.route, task_key, catalog, budgets, ledger)
         usage_path = usage_log_path(args, catalog, catalog_path)
         workdir = validate_workdir(args, catalog, route)
@@ -2162,6 +2211,9 @@ def main() -> int:
             if lock_held and lock_file is not None:
                 release_worktree_lock(lock_file, job_id=job_id)
                 lock_held = False
+            if key_lock_held and key_lock_file is not None:
+                release_owner_lock(key_lock_file, job_id=job_id)
+                key_lock_held = False
             print_receipt(receipt)
 
     if receipt is None:

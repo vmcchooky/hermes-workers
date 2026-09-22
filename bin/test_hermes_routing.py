@@ -947,6 +947,52 @@ class HermesRoutingTests(unittest.TestCase):
             self.assertEqual(recovered["output_tokens"], 9)
             self.assertEqual(recovered["source"], "codex-session-store-posthoc")
 
+    def test_owner_lock_exclusive_release_and_takeover(self) -> None:
+        import tempfile
+        launcher = self.launcher
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "k.lock"
+            launcher.acquire_owner_lock(first, job_id="j1", scope="taskkey",
+                                        entry_extra={"route": "r", "timeout_seconds": 60})
+            with self.assertRaises(launcher.LauncherError) as busy:
+                launcher.acquire_owner_lock(first, job_id="j2", scope="taskkey",
+                                            entry_extra={})
+            self.assertEqual(busy.exception.code, "taskkey_busy")
+            launcher.release_owner_lock(first, job_id="j2")
+            self.assertTrue(first.exists())
+            launcher.release_owner_lock(first, job_id="j1")
+            self.assertFalse(first.exists())
+            launcher.acquire_owner_lock(first, job_id="j3", scope="taskkey",
+                                        entry_extra={})
+            stale = root / "s.lock"
+            stale.write_text(json.dumps({"pid": 999999999, "job_id": "old"}),
+                             encoding="utf-8")
+            launcher.acquire_owner_lock(stale, job_id="j4", scope="worktree",
+                                        entry_extra={})
+            entry = json.loads(stale.read_text(encoding="utf-8"))
+            self.assertTrue(entry.get("stale_lock_cleared"))
+            self.assertEqual(entry.get("job_id"), "j4")
+            third = root / "w.lock"
+            launcher.acquire_worktree_lock(third, job_id="j1", route_id="r", timeout=60.0)
+            with self.assertRaises(launcher.LauncherError) as wbusy:
+                launcher.acquire_worktree_lock(third, job_id="j2", route_id="r", timeout=60.0)
+            self.assertEqual(wbusy.exception.code, "worktree_busy")
+
+    def test_taskkey_lock_path_scoped(self) -> None:
+        import tempfile
+        launcher = self.launcher
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            catalog = {"policy": {"taskkey_locks": str(root / "outside")}}
+            with self.assertRaises(launcher.LauncherError) as scoped:
+                launcher.taskkey_lock_path("some-key", catalog, root / "c.json")
+            self.assertEqual(scoped.exception.code, "taskkey_locks_outside_scope")
+            plain = launcher.taskkey_lock_path(
+                "some-key", {"policy": {}}, CATALOG)
+            self.assertEqual(plain.parent.name, "worker_taskkeys")
+            self.assertEqual(len(plain.stem), 64)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
