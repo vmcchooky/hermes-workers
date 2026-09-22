@@ -16,6 +16,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: stub worker executables for dry-runs
+        # Dry-runs resolve (never execute) the CLI binaries; these empty
+        # shims satisfy allowlist resolution on runners without vendor installs.
+        run: |
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/fakebin" -Force
+          foreach ($n in @("codex.exe", "agy.exe", "opencode.exe")) {
+            New-Item -ItemType File -Path "$env:RUNNER_TEMP/fakebin/$n" -Force
+          }
+          "$env:RUNNER_TEMP/fakebin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: routing and launcher gates
         run: python bin/test_hermes_routing.py
       - name: stub extractor

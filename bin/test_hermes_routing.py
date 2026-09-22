@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -24,6 +25,23 @@ class HermesRoutingTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
         cls.routes = cls.catalog["routes"]
+        # Hermetic twin: identical gates with workdir roots relocated to this
+        # checkout, so spawn-path tests pass on any machine (CI runners have
+        # no D:/Hermes). Config-assertion tests keep using the real catalog.
+        cls.test_catalog = copy.deepcopy(cls.catalog)
+        cls.test_catalog["policy"]["allowed_workdir_roots"] = [str(ROOT)]
+        cls.test_catalog["routes"]["opencode-zen-contributor"]["allowed_workdir"] = str(WORKDIR)
+        # Directory policies resolve relative to the catalog file; pin them to
+        # absolute repo paths so the temp catalog stays inside HERMES_ROOT
+        # scope (dry-runs never write, this only satisfies validation).
+        cls.test_catalog["policy"]["attempt_ledger"] = str(ROOT / "logs" / "worker_attempts")
+        cls.test_catalog["policy"]["worktree_locks"] = str(ROOT / "logs" / "worker_worktrees")
+        cls.test_catalog["policy"]["usage_log"] = str(ROOT / "logs" / "worker_usage.jsonl")
+        cls.test_routes = cls.test_catalog["routes"]
+        cls._catalog_tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls._catalog_tmp.cleanup)
+        cls.test_catalog_path = Path(cls._catalog_tmp.name) / "worker-catalog.test.json"
+        cls.test_catalog_path.write_text(json.dumps(cls.test_catalog), encoding="utf-8")
         spec = importlib.util.spec_from_file_location("hermes_worker", LAUNCHER)
         assert spec and spec.loader
         cls.launcher = importlib.util.module_from_spec(spec)
@@ -40,6 +58,8 @@ class HermesRoutingTests(unittest.TestCase):
                 "synthetic routing validation only; do not execute",
                 "--workdir",
                 str(WORKDIR),
+                "--catalog",
+                str(self.test_catalog_path),
                 "--dry-run",
                 *extra,
             ],
@@ -160,11 +180,11 @@ class HermesRoutingTests(unittest.TestCase):
 
     def test_contributor_accepts_exact_child_not_sibling(self):
         args = argparse.Namespace(workdir=str(WORKDIR / "csv_counter_20260919T2345_plus0700"))
-        actual = self.launcher.validate_workdir(args, self.catalog, self.routes["opencode-zen-contributor"])
+        actual = self.launcher.validate_workdir(args, self.test_catalog, self.test_routes["opencode-zen-contributor"])
         self.assertEqual(actual, Path(args.workdir).resolve())
         args.workdir = str(ROOT / "logs")
         with self.assertRaises(self.launcher.LauncherError):
-            self.launcher.validate_workdir(args, self.catalog, self.routes["opencode-zen-contributor"])
+            self.launcher.validate_workdir(args, self.test_catalog, self.test_routes["opencode-zen-contributor"])
 
     def test_cost_sum_dedup_and_ignore_nonterminal_payload(self):
         def step(key, cost):
@@ -199,7 +219,8 @@ class HermesRoutingTests(unittest.TestCase):
         import os
         env = dict(os.environ, PYTHONIOENCODING="cp1258")
         result = subprocess.run([sys.executable, str(LAUNCHER), "--route", "codex-normal",
-            "--workdir", str(WORKDIR), "--task", "Kiểm tra", "--dry-run"],
+            "--workdir", str(WORKDIR), "--catalog", str(self.test_catalog_path),
+            "--task", "Kiểm tra", "--dry-run"],
             env=env, capture_output=True)
         self.assertEqual(result.returncode, 0)
         json.loads(result.stdout.decode("utf-8"))
