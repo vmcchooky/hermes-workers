@@ -363,11 +363,10 @@ class HermesRoutingTests(unittest.TestCase):
     def test_model_effort_allowlist_enforced(self) -> None:
         launcher = self.launcher
         allowlist = launcher.load_model_effort_allowlist(self.catalog)
-        # Allowed pairs pass.
-        launcher.validate_model_effort("gpt-5.6-luna", "max", allowlist)
-        launcher.validate_model_effort("gpt-5.6-sol", "high", allowlist)
-        launcher.validate_model_effort("gpt-5.6-sol", "xhigh", allowlist)
-        launcher.validate_model_effort("gpt-5.6-terra", "high", allowlist)
+        # Allowed pairs pass (probed live 2026-09-23: gpt-6-sol/high and
+        # gpt-6-luna/max both accepted; gpt-6-sol-900k refused by provider).
+        launcher.validate_model_effort("gpt-6-luna", "max", allowlist)
+        launcher.validate_model_effort("gpt-6-sol", "high", allowlist)
         launcher.validate_model_effort("gpt-6-astra", "low", allowlist)
         launcher.validate_model_effort("gemini-3.8-flash-high", "high", allowlist)
         launcher.validate_model_effort("gemini-3.1-pro-high", "high", allowlist)
@@ -378,11 +377,13 @@ class HermesRoutingTests(unittest.TestCase):
         launcher.validate_model_effort("amazon-bedrock/anthropic.claude-opus-4-6-v1", "high", allowlist)
         # Forbidden pairs fail closed (never silently remapped).
         with self.assertRaises(launcher.LauncherError):
-            launcher.validate_model_effort("gpt-5.6-sol", "max", allowlist)
+            launcher.validate_model_effort("gpt-6-sol", "max", allowlist)
         with self.assertRaises(launcher.LauncherError):
-            launcher.validate_model_effort("gpt-5.6-sol", "ultra", allowlist)
+            launcher.validate_model_effort("gpt-6-sol", "ultra", allowlist)
         with self.assertRaises(launcher.LauncherError):
-            launcher.validate_model_effort("gpt-5.6-terra", "max", allowlist)
+            launcher.validate_model_effort("gpt-5.6-terra", "high", allowlist)
+        with self.assertRaises(launcher.LauncherError):
+            launcher.validate_model_effort("gpt-5.6-sol", "high", allowlist)
         with self.assertRaises(launcher.LauncherError):
             launcher.validate_model_effort("gpt-6-astra", "high", allowlist)
         with self.assertRaises(launcher.LauncherError):
@@ -581,6 +582,49 @@ class HermesRoutingTests(unittest.TestCase):
         self.assertEqual(
             self.launcher.check_data_class(argparse.Namespace(data_class="synthetic"), contributor), "synthetic"
         )
+
+    def test_route_expiry_time_boxes_private(self) -> None:
+        from datetime import date
+        launcher = self.launcher
+        mimo = self.routes["opencode-zen-mimo"]
+        self.assertEqual(mimo.get("scope"), "repository")
+        self.assertEqual(mimo.get("private_until"), "2026-09-29")
+        launcher.check_route_expiry(mimo, "synthetic")
+        launcher.check_route_expiry(mimo, "private", today=date(2026, 9, 28))
+        launcher.check_route_expiry(mimo, "private", today=date(2026, 9, 29))
+        with self.assertRaises(launcher.LauncherError) as expired:
+            launcher.check_route_expiry(mimo, "private", today=date(2026, 9, 30))
+        self.assertEqual(expired.exception.code, "route_scope_expired")
+        with self.assertRaises(launcher.LauncherError) as malformed:
+            launcher.check_route_expiry(
+                {"scope": "repository", "private_until": "someday"},
+                "private", today=date(2026, 9, 23))
+        self.assertEqual(malformed.exception.code, "route_expiry_invalid")
+        launcher.check_route_expiry({"scope": "repository"}, "private",
+                                    today=date(2030, 1, 1))
+
+    def test_clamp_to_private_window(self) -> None:
+        from datetime import datetime, timezone
+        launcher = self.launcher
+        route = {"scope": "repository", "private_until": "2026-09-29"}
+        noon = datetime(2026, 9, 29, 12, 0, tzinfo=timezone.utc)
+        self.assertEqual(launcher.clamp_to_private_window(300, route, "private", noon), 300)
+        edge = datetime(2026, 9, 29, 23, 55, tzinfo=timezone.utc)
+        self.assertEqual(launcher.clamp_to_private_window(600, route, "private", edge), 300)
+        doomed = datetime(2026, 9, 29, 23, 59, 50, tzinfo=timezone.utc)
+        with self.assertRaises(launcher.LauncherError) as refused:
+            launcher.clamp_to_private_window(300, route, "private", doomed)
+        self.assertEqual(refused.exception.code, "route_scope_expired")
+        self.assertEqual(
+            launcher.clamp_to_private_window(300, route, "synthetic", doomed), 300)
+        self.assertEqual(
+            launcher.clamp_to_private_window(300, {"scope": "repository"},
+                                             "private", doomed), 300)
+        with self.assertRaises(launcher.LauncherError) as malformed:
+            launcher.clamp_to_private_window(
+                300, {"scope": "repository", "private_until": "someday"},
+                "private", noon)
+        self.assertEqual(malformed.exception.code, "route_expiry_invalid")
 
     def test_contributor_scope_is_synthetic_only(self) -> None:
         route = self.routes["opencode-zen-contributor"]

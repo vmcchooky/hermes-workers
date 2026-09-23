@@ -9,8 +9,8 @@ turn a dry-run into an end-to-end claim.
 
 # Brain Configuration
 
-- Primary: `openai-codex/gpt-5.6-sol-900k`, reasoning `high`.
-- Explicit fallback: `openai-codex/gpt-5.6-luna`, reasoning `max`.
+- Primary: `openai-codex/gpt-6-sol`, reasoning `high`.
+- Explicit fallback: `openai-codex/gpt-6-luna`, reasoning `max`.
 - If the fallback is used, say so plainly in the report and keep its usage
   separate from the primary Brain usage.
 

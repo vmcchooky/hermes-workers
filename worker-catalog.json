@@ -1,10 +1,10 @@
 {
-  "catalog_version": 9,
-  "generated_at": "2026-09-22",
+  "catalog_version": 10,
+  "generated_at": "2026-09-23",
   "verification": {
     "mode": "read-only-cli-probe",
     "inference_run": false,
-    "notes": "Model IDs and adapter flags were read from local help/catalog metadata (codex --help, agy --help, agy models). agy 1.2.7 rejects --effort for claude-opus-4-6-thinking before inference, so that route is model-integrated/default with effort unconfirmed. Terra/Astra have no verified catalog route yet and must not be invented. End-to-end availability remains unverified until the official follow-up test. Worker timeout is a whole-child hard wall; large tasks must split checkpoints or carry an explicit approved per-task timeout. 2026-09-21: verified headless resume flags via --help probes (codex exec resume <session>, agy --conversation <id>, opencode run --session <id>); added timeout tiers, resume policy, routing tiers, and task-sizing guidance. 2026-09-21 (v3): added fixup_policy (new-task-key fixups, cap 2, --fixup-of/--fixup-depth audit flags), ephemeral_worktree policy (Brain creates, launcher never auto-creates; D:\\Hermes is not a git repo so worktrees live in target repos), and outer_ring pilot policy (redaction aid with mandatory Brain review; no Cline integration). 2026-09-22 (v4): task_sizing gate (warn 2500 chars, hard cap 6000 with --size-approval; measured on the FINAL prompt post-header; absolute 30000-char Win32 command-line ceiling; thresholds from 25 receipts where all timeouts were >=2550 chars); worker contract header injected by launcher (no worker-side test suites, parseable closing block); same-key resume verification incl. retry auto-verify (zero extra I/O, exact match); stateful fixup depth (depths must follow recorded count 1,2,... under one stable origin id); read_catalog BOM-tolerant; removed duplicate default_timeout_seconds (single source: timeout_policy.standard_seconds). Red-team findings that were REJECTED with reasons: contract idempotency on resume (fresh prompt per call, no duplication), case-folded session compare (CLI replays the id verbatim), NTFS colon worry (fixup_of never becomes a filename), as_posix slashes (universally accepted). 2026-09-22 (v5): per-key total time budget 1200s with unified --timeout-approval escape (also gates a 3rd attempt after 2 prior timeouts; trigger list in receipt.timeout_policy); ledger entries record timeout_seconds; soft timeout-discipline stays a warning only (a 456s success needed its 600s wall); key-text drift kept as procedure guidance, not code (provider prefix-cache micro). 2026-09-22 (v6): CI workflow (Windows matrix 3.11/3.13, suites plus secretscan); read-only Brain-vs-worker usage reporter (receipts plus state.db CanonicalUsage, sections never summed); catalog re-probe procedure (read-only, no inference); streaming stdout reader formally CUT (Windows pipe risk, zero gain on single-JSON adapters); Job Object cleanup deferred to launcher-crash case only (tree-kill already verified in production). 2026-09-22 (v7, benchmark-driven): per-route scarce_resource (Codex/Antigravity burn wall+rate-limit, only Bedrock burns USD); worker contract hardened (implementer identity, no meta-dispatch, no outside reads); receipt.size.prompt_est_tokens floor (chars/4) for killed-turn blindness; verifiability doctrine (crisp spec plus pre-written tests opens Tier-2 directly). 2026-09-22 (v8): opencode-zen-mimo route (MiMo V2.6 Flash Zen free). Provisional xhigh CONFIRMED by single inference probe (20s, full usage telemetry, $0, no adapter rejection); capability bench 10/10 first try in 35s at 11k input tokens with exact scope obedience; synthetic-only retained (free-tier data caution stands regardless of obedience). Session forensics CONFIRMED codex AGENTS.md auto-load contamination (~2.7k chars Brain coordination context as every worker session's first instructions): root cause of recon behavior, NOT model-specific (Luna and Sol both affected); mitigated by launcher counter-instruction plus synthetic_demo/AGENTS.override.md (upstream rejected a disable flag). Killed-turn codex tokens recoverable post-hoc from local thread_token_usage (calibrated exact on live sessions). 2026-09-22 (v9): per-task-key launcher lock (mirrors worktree lock: exclusive create, PID-liveness stale takeover, fail-closed taskkey_busy) serializing budget check, spawn, and ledger append across concurrent launches; dry-runs take no lock. No inference was run for catalog edits."
+    "notes": "Model IDs and adapter flags were read from local help/catalog metadata (codex --help, agy --help, agy models). agy 1.2.7 rejects --effort for claude-opus-4-6-thinking before inference, so that route is model-integrated/default with effort unconfirmed. Terra route removed 2026-09-23 per supervisor (no verified use in any receipt); Astra route remains model-integrated/default. End-to-end availability remains unverified until the official follow-up test. Worker timeout is a whole-child hard wall; large tasks must split checkpoints or carry an explicit approved per-task timeout. 2026-09-21: verified headless resume flags via --help probes (codex exec resume <session>, agy --conversation <id>, opencode run --session <id>); added timeout tiers, resume policy, routing tiers, and task-sizing guidance. 2026-09-21 (v3): added fixup_policy (new-task-key fixups, cap 2, --fixup-of/--fixup-depth audit flags), ephemeral_worktree policy (Brain creates, launcher never auto-creates; D:\\Hermes is not a git repo so worktrees live in target repos), and outer_ring pilot policy (redaction aid with mandatory Brain review; no Cline integration). 2026-09-22 (v4): task_sizing gate (warn 2500 chars, hard cap 6000 with --size-approval; measured on the FINAL prompt post-header; absolute 30000-char Win32 command-line ceiling; thresholds from 25 receipts where all timeouts were >=2550 chars); worker contract header injected by launcher (no worker-side test suites, parseable closing block); same-key resume verification incl. retry auto-verify (zero extra I/O, exact match); stateful fixup depth (depths must follow recorded count 1,2,... under one stable origin id); read_catalog BOM-tolerant; removed duplicate default_timeout_seconds (single source: timeout_policy.standard_seconds). Red-team findings that were REJECTED with reasons: contract idempotency on resume (fresh prompt per call, no duplication), case-folded session compare (CLI replays the id verbatim), NTFS colon worry (fixup_of never becomes a filename), as_posix slashes (universally accepted). 2026-09-22 (v5): per-key total time budget 1200s with unified --timeout-approval escape (also gates a 3rd attempt after 2 prior timeouts; trigger list in receipt.timeout_policy); ledger entries record timeout_seconds; soft timeout-discipline stays a warning only (a 456s success needed its 600s wall); key-text drift kept as procedure guidance, not code (provider prefix-cache micro). 2026-09-22 (v6): CI workflow (Windows matrix 3.11/3.13, suites plus secretscan); read-only Brain-vs-worker usage reporter (receipts plus state.db CanonicalUsage, sections never summed); catalog re-probe procedure (read-only, no inference); streaming stdout reader formally CUT (Windows pipe risk, zero gain on single-JSON adapters); Job Object cleanup deferred to launcher-crash case only (tree-kill already verified in production). 2026-09-22 (v7, benchmark-driven): per-route scarce_resource (Codex/Antigravity burn wall+rate-limit, only Bedrock burns USD); worker contract hardened (implementer identity, no meta-dispatch, no outside reads); receipt.size.prompt_est_tokens floor (chars/4) for killed-turn blindness; verifiability doctrine (crisp spec plus pre-written tests opens Tier-2 directly). 2026-09-22 (v8): opencode-zen-mimo route (MiMo V2.6 Flash Zen free). Provisional xhigh CONFIRMED by single inference probe (20s, full usage telemetry, $0, no adapter rejection); capability bench 10/10 first try in 35s at 11k input tokens with exact scope obedience; synthetic-only retained (free-tier data caution stands regardless of obedience). Session forensics CONFIRMED codex AGENTS.md auto-load contamination (~2.7k chars Brain coordination context as every worker session's first instructions): root cause of recon behavior, NOT model-specific (Luna and Sol both affected); mitigated by launcher counter-instruction plus synthetic_demo/AGENTS.override.md (upstream rejected a disable flag). Killed-turn codex tokens recoverable post-hoc from local thread_token_usage (calibrated exact on live sessions). 2026-09-22 (v9): per-task-key launcher lock (mirrors worktree lock: exclusive create, PID-liveness stale takeover, fail-closed taskkey_busy) serializing budget check, spawn, and ledger append across concurrent launches; dry-runs take no lock. No inference was run for catalog edits. 2026-09-23 (v10): GPT-5.6 Sol/Luna replaced by GPT-6 Sol (high) and GPT-6 Luna (max), both IDs plus efforts confirmed by live single-word inference probes (15-16s, exit 0); gpt-6-sol-900k REFUSED by provider on ChatGPT-account path (400 invalid_request_error), so no 900k Brain variant exists there; codex-terra route and allowlist pair deleted; opencode-zen-mimo opened to private source until 2026-09-29 inclusive per supervisor (launcher-enforced revert after; contributor stays synthetic-only)."
   },
   "cli_versions_observed": {
     "codex": "0.155.1",
@@ -27,9 +27,8 @@
       "version": 1,
       "notes": "Single source of truth for model/effort pairs. IDs verified against provider_models_cache.json (openai-codex models list), `agy models`, and in-repo adapter metadata (agent/reasoning_effort.py, agent/model_metadata.py). The launcher loads this table; it keeps no copy. Unknown pairs are unavailable, never silently remapped.",
       "pairs": {
-        "gpt-5.6-luna": ["max"],
-        "gpt-5.6-terra": ["low", "medium", "high", "xhigh"],
-        "gpt-5.6-sol": ["low", "medium", "high", "xhigh"],
+        "gpt-6-luna": ["max"],
+        "gpt-6-sol": ["high"],
         "gpt-6-astra": ["low"],
         "gpt-6-astra-900k": ["low"],
         "gemini-3.8-flash-high": ["high"],
@@ -84,7 +83,7 @@
         "use": "ordinary drafting, small fixes, first attempt at any bounded phase"
       },
       "tier2_hard": {
-        "routes": ["codex-hard", "codex-terra", "antigravity-hard"],
+        "routes": ["codex-hard", "antigravity-hard"],
         "timeout_seconds": 300,
         "use": "complex logic, deep refactoring, architecture work; escalate here only after tier-1 stalls on architecture"
       },
@@ -149,8 +148,8 @@
         "codex.exe",
         "codex"
       ],
-      "model_display": "GPT-5.6 Luna",
-      "model_id": "gpt-5.6-luna",
+      "model_display": "GPT-6 Luna",
+      "model_id": "gpt-6-luna",
       "reasoning_requested": "max",
       "reasoning_flag": "-c model_reasoning_effort=max",
       "scarce_resource": "wall-time and account rate-limit exposure (subscription account; no per-unit bill observed)",
@@ -173,32 +172,8 @@
         "codex.exe",
         "codex"
       ],
-      "model_display": "GPT-5.6 Sol",
-      "model_id": "gpt-5.6-sol",
-      "reasoning_requested": "high",
-      "reasoning_flag": "-c model_reasoning_effort=high",
-      "scarce_resource": "wall-time and account rate-limit exposure (subscription account; no per-unit bill observed)",
-      "recommended_timeout_seconds": 300,
-      "resume_supported": true,
-      "resume_flag": "exec resume <session>",
-      "quota_bucket": "openai-codex-account",
-      "sandbox": "workspace-write",
-      "requires_git_worktree": true,
-      "scope": "repository",
-      "available": true,
-      "blocker": null,
-      "usage_source": "codex exec --json turn.completed.usage",
-      "session_id_source": "codex JSONL thread.started.thread_id"
-    },
-    "codex-terra": {
-      "tool": "codex",
-      "provider": "openai-codex",
-      "executable_candidates": [
-        "codex.exe",
-        "codex"
-      ],
-      "model_display": "GPT-5.6 Terra",
-      "model_id": "gpt-5.6-terra",
+      "model_display": "GPT-6 Sol",
+      "model_id": "gpt-6-sol",
       "reasoning_requested": "high",
       "reasoning_flag": "-c model_reasoning_effort=high",
       "scarce_resource": "wall-time and account rate-limit exposure (subscription account; no per-unit bill observed)",
@@ -351,16 +326,16 @@
       "model_id": "opencode/mimo-v2.6-flash-free",
       "reasoning_requested": "xhigh",
       "reasoning_flag": "--variant xhigh",
-      "scarce_resource": "none observed (Zen free tier); scope-restricted instead",
+      "scarce_resource": "none observed (Zen free tier); main-coding route per supervisor",
       "recommended_timeout_seconds": 180,
       "resume_supported": true,
       "resume_flag": "--session <session>",
       "output_format": "json",
-      "scope": "synthetic-public-only",
-      "allowed_workdir": "D:\\Hermes\\synthetic_demo",
+      "scope": "repository",
+      "private_until": "2026-09-29",
       "quota_bucket": "opencode-contributor-account",
       "available": true,
-      "blocker": "Synthetic/public only; never private source/creds. Effort xhigh confirmed by probe job 60a81f28 (20s, full telemetry, $0).",
+      "blocker": "Main coding route alongside GPT-6 Luna. Private source allowed ONLY until 2026-09-29 inclusive (launcher enforces revert to synthetic-only after); contributor route stays synthetic-only regardless.",
       "usage_source": "opencode JSON step-finish.tokens and cost when emitted",
       "session_id_source": "opencode JSON sessionID/session_id"
     },
