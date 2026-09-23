@@ -1171,13 +1171,22 @@ def acquire_owner_lock(path: Path, *, job_id: str, scope: str,
         except (OSError, json.JSONDecodeError):
             existing = {}
         holder = existing.get("pid") if isinstance(existing, dict) else None
-        if _pid_alive(holder):
+        def _refuse_busy() -> None:
+            other = existing.get("job_id") if isinstance(existing, dict) else None
             raise LauncherError(
                 busy_code,
-                f"another worker (pid {holder}, job {existing.get('job_id') if isinstance(existing, dict) else None}) "
+                f"another worker (pid {holder}, job {other}) "
                 f"holds this {noun}; concurrent launches on one {noun} are refused, "
                 "wait for the holder or use a new task-key",
             )
+        if _pid_alive(holder):
+            _refuse_busy()
+        # A single negative liveness read can lie (a transient WMI/CIM failure
+        # looks exactly like death and would wrongfully evict a live holder),
+        # so confirm death twice before taking over.
+        time.sleep(2)
+        if _pid_alive(holder):
+            _refuse_busy()
         try:
             path.unlink()
         except OSError as exc:
