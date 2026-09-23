@@ -1,10 +1,10 @@
 model:
-  default: gpt-5.6-sol-900k
+  default: gpt-6-sol
   provider: openai-codex
   base_url: https://chatgpt.com/backend-api/codex
 fallback_providers:
   - provider: openai-codex
-    model: gpt-5.6-luna
+    model: gpt-6-luna
 credential_pool_strategies:
   openai-codex: disabled
 database:
@@ -16,8 +16,8 @@ agent:
   service_tier: ''
   fast_auto_seconds: 60
   reasoning_overrides:
-    gpt-5.6-sol: high
-    gpt-5.6-luna: max
+    gpt-6-sol: high
+    gpt-6-luna: max
   verbose: false
   reasoning_effort: high
   personalities: {}

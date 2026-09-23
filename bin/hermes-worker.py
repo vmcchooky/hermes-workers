@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 import uuid
 
@@ -1249,6 +1249,76 @@ def taskkey_lock_path(task_key: str, catalog: dict[str, Any], catalog_path: Path
     return directory / f"{text_hash(task_key)}.lock"
 
 
+def check_route_expiry(route: dict[str, Any], data_class: str, today=None) -> None:
+    """Enforce time-boxed scope expansions (e.g., MiMo private-until date).
+
+    A repository-scope route carrying private_until accepts private data only
+    on or before that UTC date; afterwards private is refused exactly like a
+    synthetic-public-only route, so the expansion reverts automatically with
+    no human action. Synthetic/public tasks are never affected. A malformed
+    date fails closed. Pure function of (route, data_class, today) for tests;
+    callers pass today=None for the real clock.
+    """
+    if data_class != "private":
+        return
+    if str(route.get("scope") or "") == "synthetic-public-only":
+        return
+    raw = route.get("private_until")
+    if raw is None:
+        return
+    try:
+        limit = datetime.strptime(str(raw).strip(), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise LauncherError(
+            "route_expiry_invalid",
+            "route private_until is not a YYYY-MM-DD date; refusing private data",
+        )
+    now = today if today is not None else datetime.now(timezone.utc).date()
+    if now > limit:
+        raise LauncherError(
+            "route_scope_expired",
+            f"private access on this route expired {limit.isoformat()}; "
+            "it is synthetic-only again until re-authorized",
+        )
+
+
+def clamp_to_private_window(timeout: float, route: dict[str, Any], data_class: str,
+                             now: datetime | None = None) -> float:
+    """Cap the spawn deadline at the end of a route's private window (UTC).
+
+    check_route_expiry gates WHO may spawn; this closes the residual edge of
+    a private job spawned at 23:59 outliving midnight into the expired date:
+    no spawn may run past 00:00:00Z of the day after private_until. Under 60s
+    of window left the spawn is refused outright (a shorter run is useless).
+    Synthetic tasks and routes without private_until pass through untouched.
+    Pure function of (timeout, route, data class, now) for tests.
+    """
+    if data_class != "private":
+        return timeout
+    raw = route.get("private_until")
+    if raw is None:
+        return timeout
+    try:
+        limit_end = datetime.strptime(str(raw).strip(), "%Y-%m-%d").replace(
+            tzinfo=timezone.utc) + timedelta(days=1)
+    except (ValueError, TypeError):
+        raise LauncherError(
+            "route_expiry_invalid",
+            "route private_until is not a YYYY-MM-DD date; refusing private data",
+        )
+    moment = now if now is not None else datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    remaining = (limit_end - moment).total_seconds()
+    if remaining < 60:
+        raise LauncherError(
+            "route_scope_expired",
+            f"private window closes in {max(0, int(remaining))}s; "
+            "too little wall left for a useful spawn",
+        )
+    return min(timeout, remaining)
+
+
 def check_data_class(args: argparse.Namespace, route: dict[str, Any]) -> str:
     """Refuse private data on synthetic-public-only routes (Contributor)."""
     data_class = str(args.data_class or "synthetic")
@@ -1934,8 +2004,12 @@ def main() -> int:
         ledger_file = ledger_path(task_key, catalog, catalog_path)
         ledger = load_ledger(ledger_file)
         data_class = check_data_class(args, route)
+        check_route_expiry(route, data_class)
         paid_route = str(route.get("provider") or "") == "amazon-bedrock"
         timeout, timeout_policy = resolve_timeout(args, policy)
+        timeout = clamp_to_private_window(timeout, route, data_class)
+        timeout_policy["seconds"] = timeout
+        timeout_policy["tier"] = timeout_tier_label(policy, timeout)
         approval_triggers = time_approval_triggers(args, policy, ledger, timeout)
         time_approval_fp = gate_time_approval(args, approval_triggers)
         timeout_policy["approval_triggers"] = approval_triggers

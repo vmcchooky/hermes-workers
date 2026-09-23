@@ -1,7 +1,7 @@
 ---
 name: hermes-routing
 description: "Route Hermes work to an allowlisted worker."
-version: 0.8.2
+version: 0.9.1
 author: Hermes Supervisor, Hermes Agent
 license: MIT
 platforms: [windows]
@@ -18,6 +18,11 @@ worker model IDs, reasoning settings, scopes, and usage sources. This skill
 does not perform inference itself and does not replace a worker's result with
 a second implementation. The launcher (`bin/hermes-worker.py`) enforces the
 model/effort allowlist in code; this text never authorizes a pair the code rejects.
+
+Operational status: CONDITIONAL operation, not declared stable. Full stable
+is re-declared only after Luna exits probation, MiMo reaches 5 independent
+jobs, and 20 consecutive jobs show no unexpected failures (timeouts still
+count if tier-appropriate with receipts).
 
 ## When to Use
 
@@ -92,21 +97,25 @@ terminal(command="python bin/hermes-worker.py --route <route> --task \"synthetic
 1. Read only the selected route entry and match difficulty, risk, data class,
    tool capability, quota, billing. Tests/builds run directly (no worker).
    Tiers: Tier-1 draft (`antigravity-normal` Flash/high or `codex-normal`
-   Luna/max, 180s); Tier-2 hard (`codex-hard`/`codex-terra` Sol/Terra or
+   GPT-6 Luna/max, 180s) alongside `opencode-zen-mimo` MiMo Flash/xhigh as
+   main-coding peer; Tier-2 hard (`codex-hard` GPT-6 Sol or
    `antigravity-hard` Pro, 300s) after Tier-1 stalls; Tier-3 review/paid
    (`codex-review` Astra/low, `antigravity-review` Opus integrated,
-   `opencode-bedrock` Opus, 300s). Exceptions: crisp spec + pre-written tests
+   `opencode-bedrock` Opus, 300s). Terra route deleted 2026-09-23, never
+   use it. Exceptions: crisp spec + pre-written tests
    → Tier-2 Sol directly; torn between tiers → higher one; trivial <2min work
    stays with Brain (26k+ fixed overhead per call). Synthetic order: Flash,
    contributor (6/6 ok), MiMo third (fastest/cheapest on 4 jobs; promotion
    needs 5 INDEPENDENT jobs (distinct task-keys, never stacked verdicts on
    one job) with job-level FPVR ≥4/5 AND wall/tokens at or below the
-   incumbent Tier-1 median). `codex-normal` opens Tier-1 on probation for code
-   tasks: log verdicts; clear probation at code-task FPVR ≥7/10, restrict to
-   non-code drafting at ≤4/10 (stratified by task type where N allows;
-   current: 2/4 mine). Never open with the heaviest model
-   for UNCERTAIN work (the Sol-direct exception above is the only carve-out).
-   Never private source to free tiers. Cost model
+   incumbent Tier-1 median). `codex-normal` (now GPT-6 Luna) opens Tier-1 on
+   a FRESH probation for code tasks: GPT-5.6 Luna verdicts do NOT transfer
+   across the model change; clear probation at code-task FPVR ≥8/10,
+   restrict to non-code drafting at ≤5/10, extend probation by 5 verdicts
+   at 6–7/10 (stratified by task type where N allows). MiMo takes private source ONLY until 2026-09-29 inclusive
+   (launcher reverts it to synthetic-only after; contributor stays
+   synthetic-only regardless). Never private source to other free
+   tiers. Cost model
    (`scarce_resource`): Codex/Antigravity burn wall + rate-limit (optimize
    wall + first-pass rate); only Bedrock burns USD. Size tasks to tiers
    (~2500 chars; launcher warns >2500, refuses >6000 without
@@ -202,15 +211,18 @@ verdicts); Job Object cleanup (launcher-crash orphan evidence).
 
 ## Model/effort allowlist (enforced by the launcher)
 
-- Codex: Luna = max only; Terra/Sol = low/medium/high/xhigh (never
-  max/ultra); Astra = low only. Availability = per-route `available` flag;
-  never invent IDs.
+- Codex: GPT-6 Luna = max only; GPT-6 Sol = high only (both probed live
+  2026-09-23; widen pairs only with a new probe, never by analogy).
+  Terra route deleted, never reference it. Astra = low only. Availability =
+  per-route `available` flag; never invent IDs.
 - Antigravity: Flash/Pro use `--effort high`; Opus Thinking uses integrated
   reasoning with the exact label `model-integrated/default, effort chưa xác
   nhận`; if Opus is unavailable, route Pro instead.
 - OpenCode: Contributor = xhigh, synthetic/public only, never private
-  source/creds; Bedrock = high or max, paid fallback, bounded invocations.
-- Brain: Sol/high default, Luna/max fallback only. Never apply the worker
+  source/creds; MiMo = xhigh, main-coding peer, private allowed ONLY until
+  2026-09-29 inclusive; Bedrock = high or max, paid fallback, bounded
+  invocations.
+- Brain: GPT-6 Sol/high default, GPT-6 Luna/max fallback only. Never apply the worker
   fallback chain to Brain implicitly.
 
 ## Pitfalls
@@ -236,6 +248,11 @@ verdicts); Job Object cleanup (launcher-crash orphan evidence).
   prompt + `synthetic_demo/AGENTS.override.md`; session files stay local
   (no credential values ever found in stores).
 - Jev classifier deferred (needs key + pilot; regex classifier stays).
+- Brain context watch (GPT-6 non-900k ID): truncated JSON payloads,
+  `finish_reason != "stop"`, coordinator rule violations appearing after
+  turn 3, or single coordination turns slower than 90s are canary signals;
+  on any of them, checkpoint, consider the Luna fallback, and report —
+  rollback is 4 reverted lines (see backups).
 - Per-call overhead decomposes to ~1k chars launcher header + ~2.7k AGENTS.md
   auto-load + task text; the remaining ~20k+ tokens are provider-side system
   context, unobservable and untrimmable from here — trim task text, not the

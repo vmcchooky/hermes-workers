@@ -7,8 +7,8 @@ Hermes Brain is the coordinator. The worker route source of truth is
 
 ## Required behavior
 
-- Brain is configured as `openai-codex/gpt-5.6-sol-900k` with `high` reasoning.
-- Brain's only configured fallback is `openai-codex/gpt-5.6-luna` with `max`;
+- Brain is configured as `openai-codex/gpt-6-sol` with `high` reasoning.
+- Brain's only configured fallback is `openai-codex/gpt-6-luna` with `max`;
   report explicitly whenever that fallback is used.
 - Delegate implementation, difficult analysis, and review to an allowlisted
   worker route. Do not redo the worker's coding task in Brain.
