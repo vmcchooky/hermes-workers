@@ -1,7 +1,7 @@
 ---
 name: hermes-routing
 description: "Route Hermes work to an allowlisted worker."
-version: 0.8.1
+version: 0.8.2
 author: Hermes Supervisor, Hermes Agent
 license: MIT
 platforms: [windows]
@@ -98,10 +98,13 @@ terminal(command="python bin/hermes-worker.py --route <route> --task \"synthetic
    `opencode-bedrock` Opus, 300s). Exceptions: crisp spec + pre-written tests
    → Tier-2 Sol directly; torn between tiers → higher one; trivial <2min work
    stays with Brain (26k+ fixed overhead per call). Synthetic order: Flash,
-   contributor (6/6 ok), MiMo third (fastest/cheapest on 1 job; re-rank on
-   next 5 verdicts only). `codex-normal` opens Tier-1 on probation for code
-   tasks: log verdicts; if its code-task FPVR trails Tier-2 over the next 10
-   verdicts, move code tasks to Flash/Sol. Never open with the heaviest model
+   contributor (6/6 ok), MiMo third (fastest/cheapest on 4 jobs; promotion
+   needs 5 INDEPENDENT jobs (distinct task-keys, never stacked verdicts on
+   one job) with job-level FPVR ≥4/5 AND wall/tokens at or below the
+   incumbent Tier-1 median). `codex-normal` opens Tier-1 on probation for code
+   tasks: log verdicts; clear probation at code-task FPVR ≥7/10, restrict to
+   non-code drafting at ≤4/10 (stratified by task type where N allows;
+   current: 2/4 mine). Never open with the heaviest model
    for UNCERTAIN work (the Sol-direct exception above is the only carve-out).
    Never private source to free tiers. Cost model
    (`scarce_resource`): Codex/Antigravity burn wall + rate-limit (optimize
@@ -190,15 +193,12 @@ session with explicit role instruction — resume replays confusion (proven live
 
 ## Deferred items register (reviewed quarterly with the re-probe)
 
-| Item | Revisit trigger |
-|---|---|
-| Jev classifier integration | user-supplied API key + 10-task shadow pilot measuring FPVR delta |
-| Dynamic model selector | N≥200 labeled verdicts |
-| Streaming stdout reader | STAYS CUT unless new adapter evidence (single-JSON adapters gain zero) |
-| Job Object cleanup | launcher-crash orphan evidence in production |
-| Language port | profile proving launcher overhead matters (now 168ms vs 15–600s jobs) |
-| Ledger index/DB | N≥100k receipts |
-| Task-key budget race | CLOSED by per-key lock (fail-closed `taskkey_busy`) + single-coordinator discipline |
+CLOSED (do not reopen without new evidence): streaming stdout reader
+(Windows pipe risk, zero gain on single-JSON adapters); language port
+(launcher 168ms vs 15–600s jobs); ledger index (N≪100k).
+DEFERRED (revisit only on trigger): Jev classifier (user-supplied API key +
+10-task shadow pilot on FPVR delta); dynamic model selector (N≥200 labeled
+verdicts); Job Object cleanup (launcher-crash orphan evidence).
 
 ## Model/effort allowlist (enforced by the launcher)
 

@@ -993,6 +993,36 @@ class HermesRoutingTests(unittest.TestCase):
             self.assertEqual(plain.parent.name, "worker_taskkeys")
             self.assertEqual(len(plain.stem), 64)
 
+    def test_stale_takeover_confirms_death_twice(self) -> None:
+        import tempfile
+        from unittest import mock
+        launcher = self.launcher
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            claimed = root / "c.lock"
+            claimed.write_text(json.dumps({"pid": 424242, "job_id": "live"}),
+                               encoding="utf-8")
+            with mock.patch.object(launcher, "_pid_alive",
+                                   side_effect=[False, True]), \
+                 mock.patch("time.sleep") as slept:
+                with self.assertRaises(launcher.LauncherError) as busy:
+                    launcher.acquire_owner_lock(claimed, job_id="j2", scope="taskkey",
+                                                entry_extra={})
+                self.assertEqual(busy.exception.code, "taskkey_busy")
+                slept.assert_called_once_with(2)
+            self.assertTrue(claimed.exists())
+            gone = root / "g.lock"
+            gone.write_text(json.dumps({"pid": 424243, "job_id": "old"}),
+                            encoding="utf-8")
+            with mock.patch.object(launcher, "_pid_alive",
+                                   side_effect=[False, False]), \
+                 mock.patch("time.sleep"):
+                launcher.acquire_owner_lock(gone, job_id="j3", scope="taskkey",
+                                            entry_extra={})
+            entry = json.loads(gone.read_text(encoding="utf-8"))
+            self.assertTrue(entry.get("stale_lock_cleared"))
+            self.assertEqual(entry.get("job_id"), "j3")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
